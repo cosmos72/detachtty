@@ -192,13 +192,10 @@ int init_tty(void) {
     {
         tty = saved_tty;
         tty.c_iflag &= ~(INLCR|ICRNL|IGNCR|IXON|IXOFF);
-        tty.c_oflag &= ~(OCRNL|ONOCR|ONLRET);
-#ifdef ONLCR
-        tty.c_oflag |= ONLCR; /* avoid staircase effect */
-#endif
-        tty.c_oflag &= ~(ONLCR|OCRNL|ONOCR|ONLRET);
-        tty.c_lflag &= ~(ECHO|ICANON|IEXTEN);
-        tty.c_cc[VSTART] = tty.c_cc[VSTOP] = _POSIX_VDISABLE;
+        tty.c_oflag &= ~(OCRNL|ONLCR|ONOCR|ONLRET);
+        tty.c_lflag = (tty.c_lflag & ~(ECHO|ICANON|IEXTEN)) | ISIG;
+        tty.c_cc[VSUSP] = tty.c_cc[VSTART] = tty.c_cc[VSTOP] = _POSIX_VDISABLE;
+        tty.c_cc[VQUIT] = '\034';
         err = tcsetattr(0, TCSADRAIN, &tty);
     }
     return err;
