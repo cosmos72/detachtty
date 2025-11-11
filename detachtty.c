@@ -379,7 +379,7 @@ static void set_noecho(int fd) {
 static void cleanup_signal_handler(int sig) {
     struct sigaction act;
     act.sa_handler = SIG_DFL;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
     sigaction(sig, &act, 0);
 }
@@ -440,7 +440,7 @@ static void init_signal_handlers(void) {
 
     /* catch SIGCHLD, SIGQUIT, SIGTERM, SIGILL, SIGFPE... and exit */
     act.sa_handler = fatal_signal_handler;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags = SA_RESETHAND;
     for (i = 0; i < sizeof(fatal_sig)/sizeof(fatal_sig[0]); i++) {
         sigaction(fatal_sig[i],&act,0);
@@ -448,13 +448,13 @@ static void init_signal_handlers(void) {
 
     /* we can be HUPped */
     act.sa_handler = sighup_signal_handler;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
     sigaction(SIGHUP, &act,0);
 
     /* ignore SIGPIPE */
     act.sa_handler = SIG_IGN;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
     sigaction(SIGPIPE, &act,0);
 }

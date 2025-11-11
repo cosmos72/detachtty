@@ -33,7 +33,7 @@ void connect_ssh(char *host, char *path, char *text, char *timeout) ;
 int init_tty(void);
 int cleanup_tty(void);
 static void init_signal_handlers(void);
-static void cleanup_signal_handler(int signal);
+static void cleanup_signal_handler(int sig);
 
 #ifndef UNIX_PATH_MAX
 # define UNIX_PATH_MAX    108
@@ -53,41 +53,42 @@ static char * const MY_NAME = "attachtty";
 */
 
 volatile int was_interrupted=0, was_suspended=0, was_resized=0, time_to_die=0;
-void tears_in_the_rain(int signal) {
-    time_to_die=signal;
-    cleanup_signal_handler(signal);
+void tears_in_the_rain(int sig) {
+    time_to_die=sig;
+    cleanup_signal_handler(sig);
 }
-void control_c_pressed(int signal) {
-    (void)signal;
-    was_interrupted=1;
+void control_c_pressed(int sig) {
+    was_interrupted=sig;
 }
-void control_z_pressed(int signal) {
-    (void)signal;
-    was_suspended=1;
+void control_z_pressed(int sig) {
+    was_suspended=sig;
 }
-void window_resized(int signal) {
-    (void)signal;
-    was_resized=1;
+void window_resized(int sig) {
+    was_resized=sig;
 }
 
 void init_ctrl_z_handler(void)  {
     struct sigaction act;
     act.sa_handler = control_z_pressed;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags = SA_RESETHAND;
     sigaction(SIGTSTP,&act,0);
+    sigaction(SIGTTIN,&act,0);
+    sigaction(SIGTTOU,&act,0);
 }
 
 void cleanup_ctrl_z_handler(void) {
     cleanup_signal_handler(SIGTSTP);
+    cleanup_signal_handler(SIGTTIN);
+    cleanup_signal_handler(SIGTTOU);
 }
 
-void suspend_myself(void) {
-    /* restore tty and SIGTSTP settings before suspending myself */
+void suspend_myself(int sig) {
+    /* restore tty and SIGTSTP,SIGTTIN,SIGTTOU settings before suspending myself */
     cleanup_tty();
     cleanup_ctrl_z_handler();
     
-    kill(getpid(), SIGTSTP);
+    kill(getpid(), sig);
 
     /* received SIGCONT: perform again initial setup */
     init_ctrl_z_handler();
@@ -142,22 +143,22 @@ static void init_signal_handlers(void) {
     
     /* catch SIGINT and send character \003 over the link */
     act.sa_handler=control_c_pressed;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags=0;
     sigaction(SIGINT,&act,0);
 
     /* catch SIGWINCH and send window size over the link */
     act.sa_handler=window_resized;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags=0;
     sigaction(SIGWINCH,&act,0);
 
-    /* catch SIGSTOP and cleanup tty before suspending */
+    /* catch SIGTSTP, SIGTTIN, SIGTTOU and cleanup tty before suspending */
     init_ctrl_z_handler();
 
     /* catch SIGCHLD, SIGQUIT, SIGTERM, SIGILL, SIGFPE... and exit */
     act.sa_handler = tears_in_the_rain;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags=SA_RESETHAND;
     for (i = 0; i < sizeof(fatal_sig)/sizeof(fatal_sig[0]); i++) {
         sigaction(fatal_sig[i],&act,0);
@@ -167,7 +168,7 @@ static void init_signal_handlers(void) {
 static void cleanup_signal_handler(int sig) {
     struct sigaction act;
     act.sa_handler = SIG_DFL;
-    sigemptyset(&(act.sa_mask));
+    sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
     sigaction(sig, &act, 0);
 }
@@ -308,8 +309,9 @@ void connect_direct(char * path, char *text, int timeout) {
             write(sock,"\003",1);
         }
         if (was_suspended) {
-            was_suspended=0;
-            suspend_myself();
+            int sig = was_suspended;
+	    was_suspended = 0;
+            suspend_myself(sig);
         }
         if (was_resized && pty_master >= 0) {
             was_resized=0;
